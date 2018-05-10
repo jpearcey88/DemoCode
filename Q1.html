@@ -13,6 +13,7 @@
 				box-shadow: 0px 6px 10px 3px #999999;
 			}
 			table th {
+				text-align:center;
 				background-color: #80ff80;
 				border-bottom: 1px solid #d9d9d9;
 			}
@@ -29,6 +30,9 @@
 			}
 			table tr.odd {
 				background-color: #e6ffe6;
+			}
+			table td {
+				padding:5px;
 			}
 			.dateCol {
 				min-width: 140px;
@@ -247,8 +251,8 @@
 						this.props.summaryData.map((v, i) =>
 						    <tr key={i} className={i % 2 === 0 ? "even" : "odd"}>
 								<td>{v.type}</td>
-								<td>{v.count}</td>
-								<td>{v.time}:00</td>
+								<td className="text-center">{v.count}</td>
+								<td className="text-center">{v.time}:00</td>
 							</tr>
 						)
 					)
