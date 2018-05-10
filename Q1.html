@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8" />
+		<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+		<style>
+			.text-middle {
+				vertical-align: middle;
+				line-height: calc(2.25rem + 2px);
+			}
+			table {
+				width: 100%;
+				box-shadow: 0px 6px 10px 3px #999999;
+			}
+			table th {
+				background-color: #80ff80;
+				border-bottom: 1px solid #d9d9d9;
+			}
+			table tfoot {
+				background-color: #80ff80;
+				border-top: 1px solid #d9d9d9;
+			}
+			table tfoot .btn-link {
+				border:none;
+				padding: 6px 6px;
+			}
+			table tr.even {
+				background-color: #fff;
+			}
+			table tr.odd {
+				background-color: #e6ffe6;
+			}
+			.dateCol {
+				min-width: 140px;
+			}
+			.loader {
+				border: 16px solid #f3f3f3; /* Light grey */
+				border-top: 16px solid #80ff80; /* Blue */
+				border-radius: 50%;
+				width: 120px;
+				height: 120px;
+				animation: spin 2s linear infinite;
+				position: fixed;
+				z-index: 1;
+				left: calc(50% - 60px);
+				top: 10%;
+			}
+
+			@keyframes spin {
+				0% { transform: rotate(0deg); }
+				100% { transform: rotate(360deg); }
+			}
+		</style>
+	</head>
+	<body>
+		<div class="loader" style="display: none;"></div>
+		<div id="root" class="container"></div>
+		<script src="https://unpkg.com/react@16/umd/react.development.js"></script>
+		<script src="https://unpkg.com/react-dom@16/umd/react-dom.development.js"></script>
+		<script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.1/moment.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.22.1/locale/en-au.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.16/moment-timezone.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/moment-timezone/0.5.16/moment-timezone-with-data.min.js"></script>
+		<script src="https://code.jquery.com/jquery-3.3.1.js"></script>
+		<script type="text/babel">
+			class Layout extends React.Component {
+				constructor() {
+					super();
+					this.handleFormChange = this.handleFormChange.bind(this);
+					this.nextPage = this.nextPage.bind(this);
+					this.state = {
+						location: "Sydney, NSW",
+						type: "crash",
+						length: 50,
+						url: function(isSummary = false){
+							var urlStr = "https://bikewise.org:443/api/v2/incidents?proximity_square=100&proximity=" + encodeURIComponent(this.location) + "&page=1&per_page=" + this.length;
+							if (this.type !== "" && !isSummary){ urlStr += "&incident_type=" + encodeURIComponent(this.type); }
+							return urlStr;
+						},
+						summaryData: [
+							{type: "Crash", count: 0, times: [], time:0},
+							{type: "Theft", count: 0, times: [], time:0},
+							{type: "Hazard", count: 0, times: [], time:0},
+							{type: "Unconfirmed", count: 0, times: [], time:0}
+						],
+						data: [{itype:"", date:"", title:"", address:"", type:""}],
+						pagedata: [{itype:"", date:"", title:"", address:"", type:""}],
+						handleFormChange: this.handleFormChange,
+						nextPage: this.nextPage
+					};
+					this.getSummary();
+				}
+				render() {
+					return React.createElement("div", null, React.createElement(Form, this.state), React.createElement(Table1, this.state), React.createElement(Table2, this.state));
+				}
+				handleFormChange (e) {
+					this.state[e.target.name] = e.target.value;
+					this.setState(this.state);
+					if (e.target.name === "location") {
+						this.state.summaryData = [
+							{type: "Crash", count: 0, times: [], time:0},
+							{type: "Theft", count: 0, times: [], time:0},
+							{type: "Hazard", count: 0, times: [], time:0},
+							{type: "Unconfirmed", count: 0, times: [], time:0}
+						];
+						this.setState(this.state);
+						this.getSummary();
+					} else {
+						this.processPageData();
+					}
+				}
+				getSummary(){
+					sendDataToServer(this, {
+						url: this.state.url(true),
+						successCallback: function(that, data){
+							let summary = that.state.summaryData;
+							let summaryIndecies = {
+								crash : 0,
+								theft : 1,
+								hazard : 2,
+								unconfirmed : 3
+							};
+							let incidents = data.incidents;
+							let summaryIndexies = [];
+							for (let i in incidents) {
+								let incident = incidents[i];
+								let m = moment.unix(incident.occurred_at);
+								let lowerType = incident.type.toLowerCase();
+								let summaryIndex = summaryIndecies[lowerType];
+								let occurred_at = m.minute() || m.second() || m.millisecond() ? m.add(1, 'hour').startOf('hour') : m.startOf('hour');
+								
+								summary[summaryIndex].count++;
+								summary[summaryIndex].times.push(occurred_at.tz('Australia/Brisbane').format('HH'));
+							}
+							for (let i in summary){
+								let modeRes = mode(summary[i].times);
+								if(typeof modeRes[0] !== undefined){
+									summary[i].time = modeRes[0];
+								}
+							}
+							that.setState({summaryData: summary});
+							that.setState({rawData: incidents});
+							that.processPageData();
+						}
+					});
+				}
+				processPageData(){
+					var data = [];
+					var pagedata = [];
+					var format = 'DD/MM/YYYY HH:mm';
+					for (let i in this.state.rawData) {
+						let incident = this.state.rawData[i];
+						if (incident.type.toLowerCase() === this.state.type) {
+							let occurred_at = moment.unix(incident.occurred_at);
+							let row = {itype: incident.type, date: occurred_at.tz('Australia/Brisbane').format(format), title: incident.title, address: incident.address, type: incident.type};
+							
+							data.push(row);
+							if (data.length < 10){
+								pagedata.push(row);
+							}
+						}
+					}
+					this.setState({data:data,pagedata:pagedata});
+				}
+				nextPage(e){
+					let end = e.target.value * 10;
+					let pagedata = [];
+					for (let i = (end - 10); i < end; i++) {
+						if (typeof this.state.data[i] === 'undefined') break;
+						pagedata.push(this.state.data[i]);
+					}
+					this.setState({pagedata:pagedata});
+				}
+			};
+			
+			class Form extends React.Component {
+				constructor(props) {
+					super(props);
+				}
+				render() {
+					return (
+					<div className="text-center">
+						<h4>Bike Incidents!</h4>
+						<div className="form-content" className="text-left">
+							<div className="row">
+								<div className="col-6 form-group">
+									<div className="row no-gutters">
+										<label className="col-5 col-sm-7 font-weight-bold text-middle">Location of incident</label>
+										<div className="col-7 col-sm-5">
+											<select name="location" className="form-control" onChange={this.props.handleFormChange}>
+												<option value="Sydney, NSW">Sydney</option>
+												<option value="Brisbane, QLD">Brisbane</option>
+												<option value="Melbourne, VIC">Melbourne</option>
+											</select>
+										</div>
+									</div>
+								</div>
+								<div className="col-6 form-group">
+									<div name="type" className="row no-gutters">
+										<label className="col-5 col-sm-7 font-weight-bold text-middle">Incident Type</label>
+										<div className="col-7 col-sm-5">
+											<select name="type" className="form-control" onChange={this.props.handleFormChange}>
+												<option value="crash">Crash</option>
+												<option value="hazard">Hazard</option>
+												<option value="theft">Theft</option>
+												<option value="unconfirmed">Unconfirmed</option>
+											</select>
+										</div>
+									</div>
+								</div>
+							</div>
+						</div>
+					</div>
+					);
+				}
+			};
+			
+			class Table1 extends React.Component {
+				constructor(props) {
+					super(props);
+				}
+				render() {
+					return (
+						<div className="row">
+							<div className="col-12">
+								<h5>Incident Type Summary</h5>
+								<table>
+									<thead>
+										<tr>
+											<th>Incident Type</th>
+											<th>Count</th>
+											<th>Common Time</th>
+										</tr>
+									</thead>
+									<tbody>
+									{this.rows()}
+									</tbody>
+								</table>
+								<br />
+							</div>
+						</div>
+					);
+				}
+				rows() {
+					return (
+						this.props.summaryData.map((v, i) =>
+						    <tr key={i} className={i % 2 === 0 ? "even" : "odd"}>
+								<td>{v.type}</td>
+								<td>{v.count}</td>
+								<td>{v.time}:00</td>
+							</tr>
+						)
+					)
+				}
+			};
+			
+			class Table2 extends React.Component {
+				constructor(props) {
+					super(props);
+				}
+				render() {
+					return (
+						<div className="row">
+							<div className="col-12">
+								<h5>Incident Type Summary</h5>
+								<table>
+									<thead>
+										<tr>
+											<th>Incident Type</th>
+											<th className="dateCol">Occurrence Date</th>
+											<th>Title</th>
+											<th>Address</th>
+										</tr>
+									</thead>
+									<tbody>
+										{this.rows()}
+									</tbody>
+									<tfoot>
+										<tr>{this.pageList()}</tr>
+									</tfoot>
+								</table>
+							</div>
+						</div>
+					);
+				}
+				rows() {
+					if (this.props.pagedata.length > 0) {
+						return (
+							this.props.pagedata.map((v, i) =>
+								<tr key={i} className={i % 2 === 0 ? "even" : "odd"}>
+									<td>{v.itype}</td>
+									<td>{v.date}</td>
+									<td>{v.title}</td>
+									<td>{v.address}</td>
+								</tr>
+							)
+						);
+					} else {
+						return (
+							<tr className="even">
+								<td colSpan="5" className="text-center">No Content to Show</td>
+							</tr>
+						);
+					}
+				}
+				pageList() {
+					if (this.props.data.length > 0) {
+						let maxPages = Math.ceil(this.props.data.length / 10);
+						if (maxPages === 0){
+							maxPages = 1;
+						}
+						let buttons = [];
+						for (let i = 0; i < maxPages; i++) {
+							buttons.push(<input className="btn btn-link" type="button" onClick={this.props.nextPage} key={i} value={i+1} />);
+						}
+						return (<td colSpan="5" className="text-right">Pages: {buttons}</td>);
+					}
+				    return (<td colSpan="5" className="text-right"><br /></td>);
+				}
+			};
+		    ReactDOM.render( React.createElement(Layout), document.getElementById('root') );
+		</script>
+		<script type="text/javascript">
+			function sendDataToServer(that = React, settings) {
+				$('.loader').show();
+				var defaultObj = {
+					url: '',
+					method: 'get',
+					successCallback: function(that = React, data = {}) {},
+					failCallback: function(that = React, data = {}) {},
+					crossDomain: true,
+				};
+				var options = $.extend(true, defaultObj, settings);
+				$.ajax({
+					url: options.url,
+					type: options.method,
+					dataType: 'json'
+				}).done(function(data){
+					$('.loader').hide();
+					options.successCallback(that, data);
+				}).fail(function(data){
+					$('.loader').hide();
+					options.failCallback(that, data);
+				});
+			}
+			
+			function mode(numbers) {
+				var modes = [], count = [], i, number, maxIndex = 0;
+			 
+				for (i = 0; i < numbers.length; i += 1) {
+					number = numbers[i];
+					count[number] = (count[number] || 0) + 1;
+					if (count[number] > maxIndex) {
+						maxIndex = count[number];
+					}
+				}
+			 
+				for (i in count){
+					if (count.hasOwnProperty(i)) {
+						if (count[i] === maxIndex) {
+							modes.push(Number(i));
+						}
+					}
+				}
+				return modes;
+			}
+		</script>
+	</body>
+</html>
