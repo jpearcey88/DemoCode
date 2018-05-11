@@ -133,7 +133,7 @@
 								let lowerType = incident.type.toLowerCase();
 								let summaryIndex = summaryIndecies[lowerType];
 								let occurred_at = m.minute() || m.second() || m.millisecond() ? m.add(1, 'hour').startOf('hour') : m.startOf('hour');
-								
+
 								summary[summaryIndex].count++;
 								summary[summaryIndex].times.push(occurred_at.tz('Australia/Brisbane').format('HH'));
 							}
@@ -158,7 +158,7 @@
 						if (incident.type.toLowerCase() === this.state.type) {
 							let occurred_at = moment.unix(incident.occurred_at);
 							let row = {itype: incident.type, date: occurred_at.tz('Australia/Brisbane').format(format), title: incident.title, address: incident.address, type: incident.type};
-							
+
 							data.push(row);
 							if (data.length < 10){
 								pagedata.push(row);
@@ -177,7 +177,7 @@
 					this.setState({pagedata:pagedata});
 				}
 			};
-			
+
 			class Form extends React.Component {
 				constructor(props) {
 					super(props);
@@ -219,7 +219,7 @@
 					);
 				}
 			};
-			
+
 			class Table1 extends React.Component {
 				constructor(props) {
 					super(props);
@@ -258,7 +258,7 @@
 					)
 				}
 			};
-			
+
 			class Table2 extends React.Component {
 				constructor(props) {
 					super(props);
@@ -348,10 +348,10 @@
 					options.failCallback(that, data);
 				});
 			}
-			
+
 			function mode(numbers) {
 				var modes = [], count = [], i, number, maxIndex = 0;
-			 
+
 				for (i = 0; i < numbers.length; i += 1) {
 					number = numbers[i];
 					count[number] = (count[number] || 0) + 1;
@@ -359,7 +359,7 @@
 						maxIndex = count[number];
 					}
 				}
-			 
+
 				for (i in count){
 					if (count.hasOwnProperty(i)) {
 						if (count[i] === maxIndex) {
